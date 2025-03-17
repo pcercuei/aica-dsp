@@ -1,0 +1,137 @@
+#!/usr/bin/env python
+#
+# AICA DSP assembler
+#
+# GPL-2.0-or-later
+# Copyright (C) 2025 Paul Cercueil <paul@crapouillou.net>
+
+from re import compile, IGNORECASE
+from struct import pack
+from sys import argv
+
+dsp_ops = [
+      ( "TRA", 7 ),
+      ( "TWT", 1 ),
+      ( "TWA", 7 ),
+      ( None, 1 ),
+      ( "XSEL", 1 ),
+      ( "YSEL", 2 ),
+      ( "IRA", 6 ),
+      ( "IWT", 1 ),
+      ( "IWA", 5 ),
+      ( None, 1 ),
+      ( "TABLE", 1 ),
+      ( "MWT", 1 ),
+      ( "MRD", 1 ),
+      ( "EWT", 1 ),
+      ( "EWA", 4 ),
+      ( "ADRL", 1 ),
+      ( "FRCL", 1 ),
+      ( "SHFT", 2 ),
+      ( "YRL", 1 ),
+      ( "NEGB", 1 ),
+      ( "ZERO", 1 ),
+      ( "BSEL", 1 ),
+      ( "NOFL", 1 ),
+      ( "MASA", 6 ),
+      ( "ADREB", 1 ),
+      ( "NXADR", 1 ),
+      ( None, 7 ),
+]
+
+def match_value(line, inst, bits):
+    match = compile("\s*" + inst + "(:\s*(\d+))?").match(line)
+
+    if not match:
+        return (0, line)
+
+    line = line[:match.start()] + line[match.end():]
+
+    if match.group(2):
+        value = int(match.group(2))
+    elif bits == 1:
+        value = 1
+    else:
+        print("Unexpected argument to ", inst)
+        return (0, line)
+
+    if value >= 1 << bits:
+        print("Invalid value: ", value, ", trimming to ", (1 << bits) - 1)
+        value = (1 << bits) - 1
+
+    return (value, line)
+
+def main():
+    coef = [0] * 128
+    madrs = [0] * 64
+    mpro = [0] * 128
+    temp = [0] * 128
+
+    nb_coefs = 0
+    nb_madrs = 0
+    nb_steps = 0
+    nb_temps = 0
+
+    if len(argv) != 3:
+        print("Usage: dspas dspfile.s dsp.bin")
+        exit()
+
+    with open(argv[1], 'r') as f:
+        lines = f.read().splitlines()
+
+    for line in lines:
+        if len(line) == 0 or line[0] == '\n':
+            continue
+
+        match = compile("^\s*#").match(line)
+        if match:
+            continue
+
+        match = compile("^COEF\[(\d+)\]\s*=\s*(\d+)$", IGNORECASE).match(line)
+        if match:
+            coef[int(match.group(1))] = int(match.group(2))
+            nb_coefs = max(nb_coefs, int(match.group(1)) + 1)
+            continue
+
+        match = compile("^MADRS\[(\d+)\]\s*=\s*(\d+)$", IGNORECASE).match(line)
+        if match:
+            madrs[int(match.group(1))] = int(match.group(2))
+            nb_madrs = max(nb_madrs, int(match.group(1)) + 1)
+            continue
+
+        match = compile("^TEMP\[(\d+)\]\s*=\s*(\d+)$", IGNORECASE).match(line)
+        if match:
+            temp[int(match.group(1))] = int(match.group(2))
+            nb_temps = max(nb_temps, int(match.group(1)) + 1)
+            continue
+
+        match = compile("^MPRO\[(\d+)]\s*=\s*", IGNORECASE).match(line)
+        if not match:
+            print("Invalid instruction: '", line, "'")
+            continue
+
+        nb_steps = max(nb_steps, int(match.group(1)) + 1)
+
+        inst = 0
+        inst_idx = int(match.group(1))
+        line = line[len(match.group(0)):]
+
+        for op, bits in dsp_ops:
+            if op is None:
+                value = 0
+            else:
+                value, line = match_value(line, op, bits)
+            inst = (inst << bits) | value
+
+        mpro[inst_idx] = inst
+
+        if len(line) > 0:
+            print("Unknown instruction arguments: '", line, "'")
+
+    with open(argv[2], 'wb') as f:
+        f.write(pack(f"<4s4B{nb_steps}Q{nb_temps}I{nb_coefs}H{nb_madrs}H", b'DSP',
+                     nb_steps, nb_temps, nb_coefs, nb_madrs,
+                     *mpro[:nb_steps], *temp[:nb_temps], *coef[:nb_coefs], *madrs[:nb_madrs]))
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,11 @@
+# Simple effect that just replicates input channel 0 to output channels 0, 1
+# Copyright (C) 2025 Stefanos Kornilios Mitsis Poiitidis
+
+COEF[0] = 32768
+COEF[2] = 32768
+
+MPRO[0] = XSEL:1 YSEL:1 IRA:32 ZERO:1
+MPRO[1] = EWT:1 EWA:0
+
+MPRO[2] = XSEL:1 YSEL:1 IRA:32 ZERO:1
+MPRO[3] = EWT:1 EWA:1
