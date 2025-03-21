@@ -49,11 +49,8 @@ def match_value(line, inst, bits):
 
     if match.group(2):
         value = int(match.group(2))
-    elif bits == 1:
-        value = 1
     else:
-        print("Unexpected argument to ", inst)
-        return (0, line)
+        value = 1
 
     if value >= 1 << bits:
         print("Invalid value: ", value, ", trimming to ", (1 << bits) - 1)
