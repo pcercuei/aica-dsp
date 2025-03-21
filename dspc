@@ -1,0 +1,303 @@
+#!/usr/bin/env python
+#
+# AICA DSP high-level language compiler
+#
+# GPL-2.0-or-later
+# Copyright (C) 2025 Paul Cercueil <paul@crapouillou.net>
+
+from re import compile, IGNORECASE
+from struct import pack
+from sys import argv
+
+input_max = {
+        "mems": 32,
+        "mixer": 16,
+        "cdda": 2,
+}
+
+input_offset = {
+        "mems": 0,
+        "mixer": 32,
+        "cdda": 48,
+}
+
+smodes = {
+        "sat": 0,
+        "trim": 1,
+        "sat2": 2,
+        "trim2": 3,
+}
+
+def BIT(x):
+    return 1 << x
+
+def GENMASK(h, l):
+    return (0xffffffffffffffff << l) & (0xffffffffffffffff >> (63 - h))
+
+def CTZ(value):
+    return (value & -value).bit_length() - 1
+
+def FIELD_GET(field, value):
+    return (value & field) >> CTZ(field)
+
+def FIELD_PREP(field, value):
+    return (value << CTZ(field)) & field
+
+TRA = GENMASK(63, 57)
+TWT = BIT(56)
+TWA = GENMASK(55, 49)
+XSEL = BIT(47)
+YSEL = GENMASK(46, 45)
+IRA = GENMASK(44, 39)
+IWT = BIT(38)
+IWA = GENMASK(37, 33)
+TABLE = BIT(31)
+MWT = BIT(30)
+MRD = BIT(29)
+EWT = BIT(28)
+EWA = GENMASK(27, 24)
+ADRL = BIT(23)
+FRCL = BIT(22)
+SHFT = GENMASK(21, 20)
+YRL = BIT(19)
+NEGB = BIT(18)
+ZERO = BIT(17)
+BSEL = BIT(16)
+NOFL = BIT(15)
+MASA = GENMASK(14, 9)
+ADREB = BIT(8)
+NXADR = BIT(7)
+
+dsp_fields = [
+        "TRA", "TWT", "TWA", "XSEL", "YSEL", "IRA", "IWT", "IWA",
+        "TABLE", "MWT", "MRD", "EWT", "EWA", "ADRL", "FRCL", "SHFT",
+        "YRL", "NEGB", "ZERO", "BSEL", "NOFL", "MASA", "ADREB", "NXADR"
+]
+
+dummy_acc = FIELD_PREP(YSEL, 1) | BSEL # acc = x * 0 + acc
+
+def create_steps(lines):
+    steps = []
+    coefs = {}
+    nofl = False
+    smode = 0
+    imode = 0
+
+    for line in lines:
+        if len(line) == 0 or line[0] == '\n':
+            continue
+
+        match = compile("^\s*(//|#).*").match(line)
+        if match:
+            continue
+
+        match = compile("^\s*INPUT\s+(mixer|mems|cdda):(\d+)\s*$", IGNORECASE).match(line)
+        if match:
+            idx = int(match.group(2))
+            if idx >= input_max[match.group(1)]:
+                print("Invalid instruction: " + match.group(0))
+                exit()
+
+            imode = idx + input_offset[match.group(1)]
+            continue
+
+        match = compile("^\s*OUTPUT\s+yreg\s*$", IGNORECASE).match(line)
+        if match:
+            steps += [dummy_acc | FIELD_PREP(IRA, imode) | YRL]
+            continue
+
+        match = compile("^\s*OUTPUT\s+adrs\s*$", IGNORECASE).match(line)
+        if match:
+            steps += [dummy_acc | FIELD_PREP(IRA, imode) | ADRL]
+            continue
+
+        match = compile("^\s*OUTPUT\s+adrs/s\s*$", IGNORECASE).match(line)
+        if match:
+            steps += [dummy_acc | FIELD_PREP(IRA, imode) | ADRL | FIELD_PREP(SHFT, 3)]
+            continue
+
+        match = compile("^\s*OUTPUT\s+mixer:(\d+)\s*$", IGNORECASE).match(line)
+        if match:
+            idx = int(match.group(1))
+            if idx >= 16:
+                print("Invalid instruction: " + match.group(0))
+                exit()
+
+            steps += [dummy_acc | EWT | FIELD_PREP(EWA, idx)]
+            continue
+
+        match = compile("^\s*MAC\s+(input|\[\s*temp:(\d+)\s*\])\s*,\s*((shifted|yreg):(lo|hi)|#\d+)(\s*,\s*(-?)(acc|\[\s*temp:(\d+)\s*\]))?", IGNORECASE).match(line)
+        if match:
+            if match.group(1) == "input":
+                xsel = XSEL
+                tra = 0
+                ira = FIELD_PREP(IRA, imode)
+            else:
+                xsel = 0
+                tra = FIELD_PREP(TRA, int(match.group(2)))
+                ira = 0
+
+            if match.group(4) == "yreg":
+                if match.group(5) == "lo":
+                    ysel = FIELD_PREP(YSEL, 3)
+                else:
+                    ysel = FIELD_PREP(YSEL, 2)
+            elif match.group(4) == "shifted":
+                new_op = dummy_acc | FRCL
+
+                if match.group(5) == "lo":
+                    new_op += FIELD_PREP(SHFT, 3)
+
+                steps += [new_op]
+                ysel = 0
+            else:
+                ysel = FIELD_PREP(YSEL, 1)
+                coefs[len(steps)] = int(match.group(3)[1:]) << 3
+
+            if match.group(6) is not None:
+                negb = FIELD_PREP(NEGB, int(match.group(7) == '-'))
+                zero = 0
+
+                if match.group(8) == "acc":
+                    bsel = BSEL
+                else:
+                    bsel = 0
+                    tra2 = FIELD_PREP(TRA, int(match.group(9)))
+                    if xsel == 0 and tra != tra2:
+                        print("Invalid instruction: " + match.group(0))
+                        exit()
+
+                    tra = tra2
+            else:
+                bsel = 0
+                negb = 0
+                zero = ZERO
+
+            steps += [ira | xsel | tra | ysel | negb | zero | bsel]
+            continue
+
+        match = compile("^\s*SMODE\s+(sat|trim|sat2|trim2)\s*$", IGNORECASE).match(line)
+        if match:
+            smode = smodes[match.group(1)]
+            continue
+
+        match = compile("^\s*ST\s+\[\s*temp:(\d+)\s*\]\s*$", IGNORECASE).match(line)
+        if match:
+            twa = int(match.group(1))
+            if twa >= 128:
+                print("Invalid instruction: " + match.group(0))
+                exit()
+
+            steps += [dummy_acc | FIELD_PREP(SHFT, smode) | TWT | FIELD_PREP(TWA, twa)]
+            continue
+
+        match = compile("^\s*ST(F)?\s+(\[)?madrs:(\d+)(\+)?(/s)?(\])?\s*$", IGNORECASE).match(line)
+        if match:
+            masa = int(match.group(3))
+            table = 0 if match.group(2) else TABLE
+            adreb = ADREB if match.group(5) else 0
+            nxadr = NXADR if match.group(4) else 0
+            nofl = 0 if match.group(1) else NOFL
+
+            if masa >= 64 or bool(match.group(2)) ^ bool(match.group(6)):
+                print("Invalid instruction: " + match.group(0))
+                exit()
+
+            steps += [dummy_acc | FIELD_PREP(SHFT, smode) | MWT | table | adreb | nxadr | nofl | FIELD_PREP(MASA, masa)]
+            continue
+
+        match = compile("^\s*LD(F)?\s+(\[)?madrs:(\d+)(\+)?(/s)?(\])?\s*,\s*mems:(\d+)\s*$", IGNORECASE).match(line)
+        if match:
+            masa = int(match.group(3))
+            iwa = int(match.group(7))
+            table = 0 if match.group(2) else TABLE
+            adreb = ADREB if match.group(5) else 0
+            nxadr = NXADR if match.group(4) else 0
+            nofl = 0 if match.group(1) else NOFL
+
+            if masa >= 64 or iwa >= 32 or bool(match.group(2)) ^ bool(match.group(6)):
+                print("Invalid instruction: " + match.group(0))
+                exit()
+
+            # Align to an odd step
+            if not len(steps) & 1:
+                steps += [dummy_acc]
+
+            steps += [dummy_acc | MRD | table | adreb | nxadr | nofl | FIELD_PREP(MASA, masa)]
+            steps += [dummy_acc]
+            steps += [dummy_acc | IWT | FIELD_PREP(IWA, iwa)]
+            continue
+
+        print(f"Unhandled instruction: {line}")
+
+    return (steps, coefs)
+
+def opt_loads(steps):
+    for idx in range(3, len(steps)):
+        step = steps[idx]
+
+        if not FIELD_GET(MRD, step) or FIELD_GET(IWT, step):
+            continue
+
+        iwa = FIELD_GET(IWA, steps[idx + 2])
+        old_idx = idx
+
+        while old_idx > 2 and not step & IWT:
+            old_idx -= 1
+            step = steps[old_idx]
+
+            # Break out of the loop if a previous opcode reads INPUTS from the
+            # mems register we are loading to.
+            if step & (ADRL | YRL | XSEL) and FIELD_GET(IRA, step) == iwa:
+                break
+
+        # Align the step to odd
+        old_idx += (old_idx & 1) ^ 1
+
+        # If this step has a MWT, we can't reuse the table/adreb/etc. bits, so
+        # use the next one.
+        while steps[old_idx] & MWT:
+            old_idx += 2
+
+        if old_idx < idx:
+            steps[old_idx] |= steps[idx] & (MRD | TABLE | ADREB | NXADR | MASA | NOFL)
+            steps[old_idx + 2] |= IWT | FIELD_PREP(IWA, iwa)
+            steps[idx] &= ~(MRD | TABLE | ADREB | NXADR | MASA | NOFL)
+            steps[idx + 2] &= ~(IWT | IWA)
+
+def generate_asm(f, steps, coefs):
+    for idx in range(0, len(steps)):
+        if idx in coefs.keys():
+            f.write(f"COEF[{idx}] = {coefs[idx]}\n")
+
+        f.write(f"MPRO[{idx}] =")
+
+        step = steps[idx]
+
+        for field in dsp_fields:
+            val = FIELD_GET(globals()[field], step)
+            if val:
+                if val == 1:
+                    f.write(f" {field}")
+                else:
+                    f.write(f" {field}:{val}")
+
+        f.write("\n")
+
+def main():
+    if len(argv) != 3:
+        print("Usage: dspc <input_file> <output_file>")
+        exit()
+
+    with open(argv[1], 'r') as f:
+        lines = f.read().splitlines()
+
+    steps, coefs = create_steps(lines)
+    opt_loads(steps)
+
+    with open(argv[2], 'w') as f:
+        generate_asm(f, steps, coefs)
+
+
+if __name__ == '__main__':
+    main()
