@@ -84,15 +84,15 @@ def main():
         if match:
             continue
 
-        match = compile("^COEF\[(\d+)\]\s*=\s*(\d+)$", IGNORECASE).match(line)
+        match = compile("^COEF\[(\d+)\]\s*=\s*(-?\d+|0[xX][0-9a-fA-F]+)$", IGNORECASE).match(line)
         if match:
-            coef[int(match.group(1))] = int(match.group(2))
+            coef[int(match.group(1))] = int(match.group(2), 0)
             nb_coefs = max(nb_coefs, int(match.group(1)) + 1)
             continue
 
-        match = compile("^MADRS\[(\d+)\]\s*=\s*(\d+)$", IGNORECASE).match(line)
+        match = compile("^MADRS\[(\d+)\]\s*=\s*(\d+|0[xX][0-9a-fA-F]+)$", IGNORECASE).match(line)
         if match:
-            madrs[int(match.group(1))] = int(match.group(2))
+            madrs[int(match.group(1))] = int(match.group(2), 0)
             nb_madrs = max(nb_madrs, int(match.group(1)) + 1)
             continue
 
