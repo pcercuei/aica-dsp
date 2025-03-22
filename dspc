@@ -126,7 +126,7 @@ def create_steps(lines):
             steps += [dummy_acc | EWT | FIELD_PREP(EWA, idx)]
             continue
 
-        match = compile("^\s*MAC\s+(input|\[\s*temp:(\d+)\s*\])\s*,\s*((shifted|yreg):(lo|hi)|#\d+)(\s*,\s*(-?)(acc|\[\s*temp:(\d+)\s*\]))?", IGNORECASE).match(line)
+        match = compile("^\s*MAC\s+(input|\[\s*temp:(\d+)\s*\])\s*,\s*((shifted|yreg):(lo|hi)|#0[xX][0-9a-fA-F]+|#\d+)(\s*,\s*(-?)(acc|\[\s*temp:(\d+)\s*\]))?", IGNORECASE).match(line)
         if match:
             if match.group(1) == "input":
                 xsel = XSEL
@@ -152,7 +152,7 @@ def create_steps(lines):
                 ysel = 0
             else:
                 ysel = FIELD_PREP(YSEL, 1)
-                coefs[len(steps)] = int(match.group(3)[1:]) << 3
+                coefs[len(steps)] = int(match.group(3)[1:], 0) << 3
 
             if match.group(6) is not None:
                 negb = FIELD_PREP(NEGB, int(match.group(7) == '-'))
