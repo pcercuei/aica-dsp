@@ -79,6 +79,7 @@ dummy_acc = FIELD_PREP(YSEL, 1) | BSEL # acc = x * 0 + acc
 
 def create_steps(lines):
     steps = []
+    madrs = []
     coefs = {}
     nofl = False
     smode = 0
@@ -91,6 +92,12 @@ def create_steps(lines):
         match = compile("^\s*(//|#).*").match(line)
         if match:
             continue
+
+        match = compile("^\s*MADRS\s*\[\s*\d+\s*\]\s*=\s*(-?\d+|0[xX][0-9a-fA-F]+)$").match(line)
+        if match:
+            madrs += [line]
+            continue
+
 
         match = compile("^\s*INPUT\s+(mixer|mems|cdda):(\d+)\s*$", IGNORECASE).match(line)
         if match:
@@ -238,7 +245,7 @@ def create_steps(lines):
     # Convert the dict to a sparse array
     coefs = [coefs[x] if x in coefs else 0 for x in range(max(coefs) + 1)]
 
-    return (steps, coefs)
+    return (steps, coefs, madrs)
 
 def opt_loads(steps):
     for idx in range(3, len(steps)):
@@ -295,9 +302,12 @@ def drop_nops(steps, coefs):
 
     return (steps, coefs)
 
-def generate_asm(f, steps, coefs):
+def generate_asm(f, steps, coefs, madrs):
+    for line in madrs:
+        f.write(f"{line}\n")
+
     for idx in range(0, len(steps)):
-        if coefs[idx]:
+        if idx < len(coefs) and coefs[idx]:
             f.write(f"COEF[{idx}] = {coefs[idx]}\n")
 
         f.write(f"MPRO[{idx}] =")
@@ -327,12 +337,12 @@ def main():
         with open(argv[1], 'r') as f:
             lines = f.read()
 
-    steps, coefs = create_steps(lines.splitlines())
+    steps, coefs, madrs = create_steps(lines.splitlines())
     steps = opt_loads(steps)
     steps, coefs = drop_nops(steps, coefs)
 
     with open(argv[2], 'w') as f:
-        generate_asm(f, steps, coefs)
+        generate_asm(f, steps, coefs, madrs)
 
 
 if __name__ == '__main__':
