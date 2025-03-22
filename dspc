@@ -7,6 +7,7 @@
 
 from re import compile, IGNORECASE
 from struct import pack
+from subprocess import check_output
 from sys import argv
 
 input_max = {
@@ -289,10 +290,15 @@ def main():
         print("Usage: dspc <input_file> <output_file>")
         exit()
 
-    with open(argv[1], 'r') as f:
-        lines = f.read().splitlines()
 
-    steps, coefs = create_steps(lines)
+    try:
+        lines = check_output(['cpp', '-E', argv[1]]).decode("ascii")
+    except FileNotFoundError:
+        print("cpp not found, input file won't be pre-processed")
+        with open(argv[1], 'r') as f:
+            lines = f.read()
+
+    steps, coefs = create_steps(lines.splitlines())
     opt_loads(steps)
 
     with open(argv[2], 'w') as f:
