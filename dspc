@@ -199,7 +199,7 @@ def create_steps(lines):
             steps += [dummy_acc | FIELD_PREP(SHFT, smode) | TWT | FIELD_PREP(TWA, twa)]
             continue
 
-        match = compile("^\s*ST(F)?\s+(\[)?madrs:(\d+)(\+)?(/s)?(\])?\s*$", IGNORECASE).match(line)
+        match = compile("^\s*ST(F)?\s+(\[)?madrs:(\d+)(\s*\+)?(/s)?(\])?\s*$", IGNORECASE).match(line)
         if match:
             masa = int(match.group(3))
             table = 0 if match.group(2) else TABLE
@@ -218,7 +218,7 @@ def create_steps(lines):
             steps += [dummy_acc | FIELD_PREP(SHFT, smode) | MWT | table | adreb | nxadr | nofl | FIELD_PREP(MASA, masa)]
             continue
 
-        match = compile("^\s*LD(F)?\s+(\[)?madrs:(\d+)(\+)?(/s)?(\])?\s*,\s*mems:(\d+)\s*$", IGNORECASE).match(line)
+        match = compile("^\s*LD(F)?\s+(\[)?madrs:(\d+)(\s\+)?(/s)?(\])?\s*,\s*mems:(\d+)\s*$", IGNORECASE).match(line)
         if match:
             masa = int(match.group(3))
             iwa = int(match.group(7))
