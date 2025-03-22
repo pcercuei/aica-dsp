@@ -204,6 +204,10 @@ def create_steps(lines):
                 print("Invalid instruction: " + match.group(0))
                 exit()
 
+            # Align to an odd step
+            if not len(steps) & 1:
+                steps += [dummy_acc]
+
             steps += [dummy_acc | FIELD_PREP(SHFT, smode) | MWT | table | adreb | nxadr | nofl | FIELD_PREP(MASA, masa)]
             continue
 
