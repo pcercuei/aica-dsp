@@ -235,6 +235,9 @@ def create_steps(lines):
 
         print(f"Unhandled instruction: {line}")
 
+    # Convert the dict to a sparse array
+    coefs = [coefs[x] if x in coefs else 0 for x in range(max(coefs) + 1)]
+
     return (steps, coefs)
 
 def opt_loads(steps):
@@ -270,9 +273,31 @@ def opt_loads(steps):
             steps[idx] &= ~(MRD | TABLE | ADREB | NXADR | MASA | NOFL)
             steps[idx + 2] &= ~(IWT | IWA)
 
+    return steps
+
+def drop_nops(steps, coefs):
+    nb_steps = len(steps)
+    was_nop = False
+
+    for idx in reversed(range(0, nb_steps)):
+        step = steps[idx]
+
+        if step == dummy_acc:
+            if was_nop:
+                steps = steps[:idx - 1] + steps[idx + 1:]
+                coefs = coefs[:idx - 1] + coefs[idx + 1:]
+                was_nop = False
+            else:
+                was_nop = True
+            continue
+
+        was_nop = False
+
+    return (steps, coefs)
+
 def generate_asm(f, steps, coefs):
     for idx in range(0, len(steps)):
-        if idx in coefs.keys():
+        if coefs[idx]:
             f.write(f"COEF[{idx}] = {coefs[idx]}\n")
 
         f.write(f"MPRO[{idx}] =")
@@ -303,7 +328,8 @@ def main():
             lines = f.read()
 
     steps, coefs = create_steps(lines.splitlines())
-    opt_loads(steps)
+    steps = opt_loads(steps)
+    steps, coefs = drop_nops(steps, coefs)
 
     with open(argv[2], 'w') as f:
         generate_asm(f, steps, coefs)
