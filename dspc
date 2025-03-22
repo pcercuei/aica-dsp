@@ -127,7 +127,7 @@ def create_steps(lines):
             steps += [dummy_acc | EWT | FIELD_PREP(EWA, idx)]
             continue
 
-        match = compile("^\s*MAC\s+(input|\[\s*temp:(\d+)\s*\])\s*,\s*((shifted|yreg):(lo|hi)|#0[xX][0-9a-fA-F]+|#\d+)(\s*,\s*(-?)(acc|\[\s*temp:(\d+)\s*\]))?", IGNORECASE).match(line)
+        match = compile("^\s*MAC\s+(input|\[\s*temp:(\d+)\s*\])\s*,\s*((shifted|yreg):(lo|hi)|#0[xX][0-9a-fA-F]+|#-?\d+)(\s*,\s*(-?)(acc|\[\s*temp:(\d+)\s*\]))?", IGNORECASE).match(line)
         if match:
             if match.group(1) == "input":
                 xsel = XSEL
