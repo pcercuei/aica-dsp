@@ -282,6 +282,30 @@ def opt_loads(steps):
 
     return steps
 
+def trickle_down(steps, coefs):
+    nb_steps = len(steps)
+    nb_tries = 0
+
+    while True:
+        found = False
+
+        for idx in reversed(range(1, nb_steps)):
+            step = steps[idx]
+
+            if step == dummy_acc or step & (MWT | MRD | IWT):
+                continue
+
+            if steps[idx - 1] == dummy_acc:
+                # The previous instruction is a NOP, we can swap with it.
+                coefs[idx - 1] = coefs[idx]
+                steps[idx - 1] = steps[idx]
+                steps[idx] = dummy_acc
+                coefs[idx] = 0
+                found = True
+
+        if not found:
+            break
+
 def drop_nops(steps, coefs):
     nb_steps = len(steps)
     was_nop = False
@@ -339,6 +363,7 @@ def main():
 
     steps, coefs, madrs = create_steps(lines.splitlines())
     steps = opt_loads(steps)
+    trickle_down(steps, coefs)
     steps, coefs = drop_nops(steps, coefs)
 
     with open(argv[2], 'w') as f:
