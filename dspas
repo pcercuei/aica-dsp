@@ -126,7 +126,7 @@ def main():
             print("Unknown instruction arguments: '", line, "'")
 
     with open(argv[2], 'wb') as f:
-        f.write(pack(f"<4s4B{nb_steps}Q{nb_temps}I{nb_coefs}H{nb_madrs}H", b'DSP',
+        f.write(pack(f"<4s4B{nb_steps}Q{nb_temps}I{nb_coefs}h{nb_madrs}H", b'DSP',
                      nb_steps, nb_temps, nb_coefs, nb_madrs,
                      *mpro[:nb_steps], *temp[:nb_temps], *coef[:nb_coefs], *madrs[:nb_madrs]))
 
