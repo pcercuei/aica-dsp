@@ -243,7 +243,7 @@ def create_steps(lines):
         print(f"Unhandled instruction: {line}")
 
     # Convert the dict to a sparse array
-    coefs = [coefs[x] if x in coefs else 0 for x in range(max(coefs) + 1)]
+    coefs = [coefs[x] if x in coefs else 0 for x in range(len(steps))]
 
     return (steps, coefs, madrs)
 
