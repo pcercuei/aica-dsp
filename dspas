@@ -27,7 +27,7 @@ dsp_ops = [
       ( "EWA", 4 ),
       ( "ADRL", 1 ),
       ( "FRCL", 1 ),
-      ( "SHFT", 2 ),
+      ( "SHIFT", 2 ),
       ( "YRL", 1 ),
       ( "NEGB", 1 ),
       ( "ZERO", 1 ),
