@@ -116,7 +116,11 @@ def create_steps(lines):
 
         match = compile("^\s*OUTPUT\s+adrs\s*$", IGNORECASE).match(line)
         if match:
-            steps += [dummy_acc | FIELD_PREP(IRA, imode) | ADRL]
+            if smode == 3:
+                steps += [dummy_acc | FIELD_PREP(SHIFT, smode) | ADRL]
+                steps += [dummy_acc | FIELD_PREP(IRA, imode) | ADRL]
+            else:
+                steps += [dummy_acc | FIELD_PREP(IRA, imode) | FIELD_PREP(SHIFT, smode) | ADRL]
             continue
 
         match = compile("^\s*OUTPUT\s+adrs/s\s*$", IGNORECASE).match(line)
@@ -131,7 +135,7 @@ def create_steps(lines):
                 print("Invalid instruction: " + match.group(0))
                 exit()
 
-            steps += [dummy_acc | EWT | FIELD_PREP(EWA, idx)]
+            steps += [dummy_acc | EWT | FIELD_PREP(EWA, idx) | FIELD_PREP(SHIFT, smode)]
             continue
 
         match = compile("^\s*MAC\s+(input|\[\s*temp:(\d+)\s*\])\s*,\s*((shifted|yreg):(lo|hi)|#0[xX][0-9a-fA-F]+|#-?\d+)(\s*,\s*(-?)(acc|\[\s*temp:(\d+)\s*\]))?", IGNORECASE).match(line)
