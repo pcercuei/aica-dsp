@@ -59,7 +59,7 @@ EWT = BIT(28)
 EWA = GENMASK(27, 24)
 ADRL = BIT(23)
 FRCL = BIT(22)
-SHFT = GENMASK(21, 20)
+SHIFT = GENMASK(21, 20)
 YRL = BIT(19)
 NEGB = BIT(18)
 ZERO = BIT(17)
@@ -71,7 +71,7 @@ NXADR = BIT(7)
 
 dsp_fields = [
         "TRA", "TWT", "TWA", "XSEL", "YSEL", "IRA", "IWT", "IWA",
-        "TABLE", "MWT", "MRD", "EWT", "EWA", "ADRL", "FRCL", "SHFT",
+        "TABLE", "MWT", "MRD", "EWT", "EWA", "ADRL", "FRCL", "SHIFT",
         "YRL", "NEGB", "ZERO", "BSEL", "NOFL", "MASA", "ADREB", "NXADR"
 ]
 
@@ -121,7 +121,7 @@ def create_steps(lines):
 
         match = compile("^\s*OUTPUT\s+adrs/s\s*$", IGNORECASE).match(line)
         if match:
-            steps += [dummy_acc | FIELD_PREP(IRA, imode) | ADRL | FIELD_PREP(SHFT, 3)]
+            steps += [dummy_acc | FIELD_PREP(IRA, imode) | ADRL | FIELD_PREP(SHIFT, 3)]
             continue
 
         match = compile("^\s*OUTPUT\s+mixer:(\d+)\s*$", IGNORECASE).match(line)
@@ -154,7 +154,7 @@ def create_steps(lines):
                 new_op = dummy_acc | FRCL
 
                 if match.group(5) == "lo":
-                    new_op += FIELD_PREP(SHFT, 3)
+                    new_op += FIELD_PREP(SHIFT, 3)
 
                 steps += [new_op]
                 ysel = 0
@@ -196,7 +196,7 @@ def create_steps(lines):
                 print("Invalid instruction: " + match.group(0))
                 exit()
 
-            steps += [dummy_acc | FIELD_PREP(SHFT, smode) | TWT | FIELD_PREP(TWA, twa)]
+            steps += [dummy_acc | FIELD_PREP(SHIFT, smode) | TWT | FIELD_PREP(TWA, twa)]
             continue
 
         match = compile("^\s*ST(F)?\s+(\[)?madrs:(\d+)(\s*\+)?(/s)?(\])?\s*$", IGNORECASE).match(line)
@@ -215,7 +215,7 @@ def create_steps(lines):
             if not len(steps) & 1:
                 steps += [dummy_acc]
 
-            steps += [dummy_acc | FIELD_PREP(SHFT, smode) | MWT | table | adreb | nxadr | nofl | FIELD_PREP(MASA, masa)]
+            steps += [dummy_acc | FIELD_PREP(SHIFT, smode) | MWT | table | adreb | nxadr | nofl | FIELD_PREP(MASA, masa)]
             continue
 
         match = compile("^\s*LD(F)?\s+(\[)?madrs:(\d+)(\s\+)?(/s)?(\])?\s*,\s*mems:(\d+)\s*$", IGNORECASE).match(line)
