@@ -299,7 +299,7 @@ def trickle_down(steps, coefs):
             if step == dummy_acc or step & (MWT | MRD | IWT):
                 continue
 
-            if steps[idx - 1] == dummy_acc:
+            if steps[idx - 1] == dummy_acc and coefs[idx - 1] == 0:
                 # The previous instruction is a NOP, we can swap with it.
                 coefs[idx - 1] = coefs[idx]
                 steps[idx - 1] = steps[idx]
