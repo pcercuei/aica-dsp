@@ -319,8 +319,8 @@ def drop_nops(steps, coefs):
 
         if step == dummy_acc and coefs[idx] == 0:
             if was_nop:
-                steps = steps[:idx - 1] + steps[idx + 1:]
-                coefs = coefs[:idx - 1] + coefs[idx + 1:]
+                steps = steps[:idx] + steps[idx + 2:]
+                coefs = coefs[:idx] + coefs[idx + 2:]
                 was_nop = False
             else:
                 was_nop = True
