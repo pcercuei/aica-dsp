@@ -317,7 +317,7 @@ def drop_nops(steps, coefs):
     for idx in reversed(range(0, nb_steps)):
         step = steps[idx]
 
-        if step == dummy_acc:
+        if step == dummy_acc and coefs[idx] == 0:
             if was_nop:
                 steps = steps[:idx - 1] + steps[idx + 1:]
                 coefs = coefs[:idx - 1] + coefs[idx + 1:]
