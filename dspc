@@ -286,9 +286,33 @@ def opt_loads(steps):
 
     return steps
 
+def acc_unchanged(step, coef):
+    return (step & (YSEL | BSEL | XSEL)) == dummy_acc and not coef
+
+def uses_shifted(step):
+    return not step & (EWT | MWT | FRCL | TWT)
+
+def uses_inputs(step):
+    return step & (XSEL | YRL) or (step & ADRL and FIELD_GET(SHIFT, step) == 3)
+
+def writes_mems(step, mems):
+    return step & IWT and FIELD_GET(IWA, step) == mems
+
+def can_move_shift(prev, step, coef):
+    return (not uses_shifted(prev) or step & SHIFT == prev & SHIFT) and acc_unchanged(prev, coef)
+
+def reads_temp(step, coef):
+    if not step & (BSEL | ZERO):
+        return True
+
+    if step & XSEL:
+        return False
+
+    return FIELD_GET(YSEL, step) != 1 or coef != 0
+
 def trickle_down(steps, coefs):
     nb_steps = len(steps)
-    nb_tries = 0
+    nb_moves = 0
 
     while True:
         found = False
@@ -296,23 +320,91 @@ def trickle_down(steps, coefs):
         for idx in reversed(range(1, nb_steps)):
             step = steps[idx]
 
-            if step == dummy_acc or step & (MWT | MRD | IWT):
+            if step == dummy_acc:
                 continue
 
-            if steps[idx - 1] == dummy_acc and coefs[idx - 1] == 0:
+            prev = steps[idx - 1]
+            coef = coefs[idx]
+            prev_coef = coefs[idx - 1]
+
+            if not step & (MWT | MRD | IWT) and prev == dummy_acc and coefs[idx - 1] == 0:
                 # The previous instruction is a NOP, we can swap with it.
                 coefs[idx - 1] = coefs[idx]
                 steps[idx - 1] = steps[idx]
                 steps[idx] = dummy_acc
                 coefs[idx] = 0
                 found = True
+                continue
+
+            if not acc_unchanged(step, coef) and acc_unchanged(prev, prev_coef):
+                # Can we move the MAC?
+                temp_dep = reads_temp(step, coef) and FIELD_GET(TRA, step) == FIELD_GET(TWA, prev)
+                frc_dep = not step & YSEL and prev & FRCL
+                ysel_dep = FIELD_GET(YSEL, step) >= 2 and prev & YRL # TODO: maybe same inputs?
+
+                move_shift = can_move_shift(prev, step, coef)
+                shifted_dep = step & MWT or step & FRCL
+
+                ira = FIELD_GET(IRA, step)
+                input_dep = (uses_inputs(prev) and FIELD_GET(IRA, prev) != ira) or writes_mems(prev, ira)
+
+                if not temp_dep and not frc_dep and not ysel_dep and not input_dep and not shifted_dep:
+                    mask = XSEL | BSEL | TRA | IRA | ZERO | TWT | TWA | EWT | EWA | FRCL
+                    steps[idx - 1] &= ~mask
+                    steps[idx - 1] |= steps[idx] & mask
+                    if FIELD_GET(YSEL, step) == 1:
+                        coefs[idx - 1] = coefs[idx]
+                        coefs[idx] = 0
+
+                    steps[idx] &= ~mask
+                    steps[idx] |= BSEL | FIELD_PREP(YSEL, 1)
+
+                    print(f"MAC at offset {idx} can be moved down to {idx-1}")
+                    found = True
+                    nb_moves += 1
+                    if False and nb_moves == 2:
+                        found = False
+                        break
+                    continue
+
+            if False and can_move_shift(prev, step, coef):
+                if step & EWT and not prev & EWT:
+                    print(f"EWT trickled down from {idx} to {idx - 1}")
+                    mask = EWT | EWA | SHIFT
+                    steps[idx - 1] &= ~(EWT | EWA | SHIFT)
+                    steps[idx - 1] |= steps[idx] & (EWT | EWA | SHIFT)
+                    steps[idx] &= ~(EWT | EWA)
+                    found = True
+
+                if step & TWT and not prev & TWT:
+                    print(f"TWT trickled down from {idx} to {idx - 1}")
+                    mask = TWT | TWA | SHIFT
+                    steps[idx - 1] &= ~(TWT | TWA | SHIFT)
+                    steps[idx - 1] |= steps[idx] & (TWT | TWA | SHIFT)
+                    steps[idx] &= ~(TWT | TWA)
+                    found = True
+
+                if step & FRCL and not prev & FRCL:
+                    print(f"FRCL trickled down from {idx} to {idx - 1}")
+                    mask = FRCL | SHIFT
+                    steps[idx - 1] &= ~(FRCL | SHIFT)
+                    steps[idx - 1] |= steps[idx] & (FRCL | SHIFT)
+                    steps[idx] &= ~FRCL
+                    found = True
+
+                # TODO: ADDRL
+
+                if not uses_shifted(step):
+                    steps[idx] &= ~SHIFT
 
         if not found:
             break
 
 def drop_nops(steps, coefs):
     nb_steps = len(steps)
+    only_nops = True
     was_nop = False
+    has_rw = False
 
     for idx in reversed(range(0, nb_steps)):
         step = steps[idx]
@@ -326,6 +418,7 @@ def drop_nops(steps, coefs):
                 was_nop = True
             continue
 
+        only_nops = False
         was_nop = False
 
     return (steps, coefs)
